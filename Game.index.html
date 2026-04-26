@@ -1,0 +1,267 @@
+```html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stroop Pro - Cyber Runner</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050508;
+            --primary: #00f3ff;
+            --danger: #ff003c;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-touch-callout: none; }
+        body, html { width: 100%; height: 100%; background: var(--bg-color); overflow: hidden; font-family: 'Cairo', sans-serif; touch-action: none; }
+        
+        canvas { display: block; width: 100%; height: 100%; position: absolute; inset: 0; z-index: 1; }
+
+        /* واجهة المستخدم (HUD) */
+        #hud { position: absolute; inset: 0; z-index: 20; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 3vh; }
+        
+        .score-container { text-align: center; background: rgba(0,0,0,0.6); padding: 5px 30px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+        #score-val { color: white; font-family: 'Orbitron', sans-serif; font-size: 2.5rem; font-weight: 900; line-height: 1; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
+        #best-val { color: #888; font-family: 'Orbitron', sans-serif; font-size: 0.7rem; letter-spacing: 2px; }
+
+        /* الكلمة المستهدفة - مرتفعة ومصغرة لرؤية المربعات */
+        #target-word-container {
+            position: absolute; top: 22%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; width: 100%; display: flex; flex-direction: column; align-items: center;
+            z-index: 50; pointer-events: none;
+            background: radial-gradient(circle, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 80%);
+            padding: 20px 0;
+        }
+        #word-instruction { color: rgba(255,255,255,0.8); font-size: 1.1rem; font-weight: 700; margin-bottom: 2px; text-shadow: 0 2px 4px rgba(0,0,0,1); }
+        #word { 
+            font-size: 4rem; font-weight: 900;
+            transition: all 0.15s cubic-bezier(0.2, 1.2, 0.3, 1.2);
+            filter: drop-shadow(0 0 15px rgba(0,0,0,1));
+            text-shadow: 3px 3px 0px rgba(0,0,0,1);
+            opacity: 0;
+        }
+
+        .screen {
+            position: absolute; inset: 0; z-index: 100; background: radial-gradient(circle at center, rgba(5,5,8,0.9) 0%, rgba(2,2,4,1) 100%);
+            backdrop-filter: blur(15px); display: flex; flex-direction: column; 
+            justify-content: center; align-items: center; transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+        .hidden { opacity: 0; pointer-events: none; transform: scale(1.05); }
+
+        .logo { font-family: 'Orbitron', sans-serif; font-size: 3.5rem; font-weight: 900; color: white; margin-bottom: 5px; text-shadow: 0 0 20px var(--primary); text-align: center; }
+        .logo span { color: var(--danger); text-shadow: 0 0 20px var(--danger); }
+        
+        .desc { color: #aaa; font-size: 1.1rem; margin-bottom: 40px; text-align: center; max-width: 85%; line-height: 1.6; }
+        .desc b { color: white; }
+
+        .btn {
+            background: transparent; color: white; border: 2px solid var(--primary);
+            padding: 12px 45px; font-size: 1.3rem; font-weight: 900; border-radius: 50px;
+            cursor: pointer; transition: all 0.2s; font-family: 'Cairo', sans-serif;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3) inset, 0 0 20px rgba(0, 243, 255, 0.4);
+            text-transform: uppercase; pointer-events: auto;
+        }
+        .btn:active { transform: scale(0.9); }
+        .btn-danger { border-color: var(--danger); box-shadow: 0 0 15px rgba(255, 0, 60, 0.3) inset, 0 0 20px rgba(255, 0, 60, 0.4); }
+
+        #flash { position: absolute; inset: 0; background: var(--danger); z-index: 90; opacity: 0; pointer-events: none; transition: opacity 0.1s; mix-blend-mode: overlay; }
+    </style>
+</head>
+<body>
+
+    <div id="flash"></div>
+
+    <div id="hud">
+        <div class="score-container">
+            <div id="score-val">0</div>
+            <div id="best-val">BEST: 0</div>
+        </div>
+    </div>
+
+    <div id="target-word-container">
+        <div id="word-instruction">اذهب إلى لون:</div>
+        <div id="word"></div>
+    </div>
+
+    <div id="start-screen" class="screen">
+        <div class="logo">NEON <span>STROOP</span></div>
+        <div class="desc">تجاهل لون النص، ركز على <b>المعنى</b>.<br>اسحب يميناً ويساراً لتوجيه المركبة.</div>
+        <button class="btn" onclick="game.start()">تشغيل النظام</button>
+    </div>
+
+    <div id="over-screen" class="screen hidden">
+        <div class="logo" style="font-size: 2.5rem; color: var(--danger);">النظام تحطم!</div>
+        <div class="desc">النتيجة النهائية: <b id="final-score" style="font-size: 2rem; font-family: 'Orbitron'; display: block; margin-top: 10px;">0</b></div>
+        <button class="btn btn-danger" onclick="game.start()">إعادة التشغيل</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const COLORS = [
+            { name: 'أحمر', hex: 0xff003c, css: '#ff003c' },
+            { name: 'أزرق', hex: 0x00f3ff, css: '#00f3ff' },
+            { name: 'أخضر', hex: 0x00ff66, css: '#00ff66' },
+            { name: 'أصفر', hex: 0xffea00, css: '#ffea00' }
+        ];
+
+        const audioEngine = {
+            ctx: null,
+            init() { if(!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); if(this.ctx.state === 'suspended') this.ctx.resume(); },
+            playSynth(freq, type, duration, vol, detune = 0) {
+                if(!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type; osc.frequency.setValueAtTime(freq, this.ctx.currentTime); osc.detune.value = detune;
+                gain.gain.setValueAtTime(0, this.ctx.currentTime); gain.gain.linearRampToValueAtTime(vol, this.ctx.currentTime + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + duration);
+            },
+            success(score) { this.init(); const baseFreq = Math.min(800, 400 + (score * 15)); this.playSynth(baseFreq, 'sine', 0.2, 0.3); },
+            fail() { this.init(); this.playSynth(150, 'sawtooth', 0.5, 0.5); this.playSynth(50, 'sawtooth', 1.0, 0.5); },
+            uiClick() { this.init(); this.playSynth(800, 'square', 0.1, 0.1); }
+        };
+
+        class ParticleSystem {
+            constructor(scene) {
+                this.particles = []; this.scene = scene;
+                const geo = new THREE.BoxGeometry(0.1, 0.1, 2);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
+                for(let i=0; i<100; i++) {
+                    let mesh = new THREE.Mesh(geo, mat); this.resetParticle(mesh); this.scene.add(mesh); this.particles.push(mesh);
+                }
+            }
+            resetParticle(p) { p.position.set((Math.random() - 0.5) * 40, (Math.random() - 0.5) * 20, Math.random() * -100 - 20); p.userData.speed = Math.random() * 2 + 1; }
+            update(dt, gameSpeed) { this.particles.forEach(p => { p.position.z += (gameSpeed * 1.5 * dt) * p.userData.speed; if(p.position.z > 10) this.resetParticle(p); }); }
+        }
+
+        const game = {
+            status: 'menu', score: 0, best: parseInt(localStorage.getItem('stroop_pro_best')) || 0,
+            baseSpeed: 25, // سرعة بداية أبطأ (كانت 40)
+            speedMultiplier: 0.8, // تسارع أبطأ وتدريجي (كان 1.5)
+            currentSpeed: 0, targetX: 0, curX: 0, shipRoll: 0, walls: [], laneWidth: 3,
+            
+            init() { this.setupThree(); this.setupInput(); document.getElementById('best-val').textContent = `BEST: ${this.best}`; this.loop(); },
+
+            setupThree() {
+                this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0x020204); this.scene.fog = new THREE.FogExp2(0x020204, 0.015);
+                this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 200);
+                this.camera.position.set(0, 3.5, 7); this.camera.lookAt(0, 1, -10);
+                this.cameraGroup = new THREE.Group(); this.cameraGroup.add(this.camera); this.scene.add(this.cameraGroup);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight); this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                document.body.appendChild(this.renderer.domElement);
+                this.scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+                this.playerLight = new THREE.PointLight(0x00f3ff, 2, 10); this.playerLight.position.set(0, 2, 0); this.scene.add(this.playerLight);
+                const shipGeo = new THREE.ConeGeometry(0.6, 2, 4); shipGeo.rotateX(Math.PI / 2);
+                const shipMat = new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0x00f3ff, emissiveIntensity: 0.5 });
+                this.player = new THREE.Mesh(shipGeo, shipMat); this.player.position.y = 0.5; this.scene.add(this.player);
+                this.grid = new THREE.GridHelper(100, 40, 0x00f3ff, 0x111122); this.grid.position.y = 0; this.grid.material.transparent = true; this.grid.material.opacity = 0.3; this.scene.add(this.grid);
+                this.particles = new ParticleSystem(this.scene);
+                window.addEventListener('resize', () => { this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); });
+            },
+
+            setupInput() {
+                let startX = 0; let startPlayerX = 0; const maxExtent = (this.laneWidth * 1.5);
+                const down = (x) => { startX = x; startPlayerX = this.targetX; audioEngine.init(); this.isDown = true; };
+                const move = (x) => { if(this.status !== 'playing' || !this.isDown) return; const sensitivity = window.innerWidth < 600 ? 0.025 : 0.015; const d = (x - startX) * sensitivity; this.targetX = Math.max(-maxExtent, Math.min(maxExtent, startPlayerX + d)); };
+                window.addEventListener('touchstart', e => down(e.touches[0].clientX), {passive: false});
+                window.addEventListener('touchmove', e => move(e.touches[0].clientX), {passive: false});
+                window.addEventListener('touchend', () => this.isDown = false);
+                window.addEventListener('mousedown', e => down(e.clientX));
+                window.addEventListener('mousemove', e => move(e.clientX));
+                window.addEventListener('mouseup', () => this.isDown = false);
+            },
+
+            start() {
+                audioEngine.uiClick(); this.score = 0; this.currentSpeed = this.baseSpeed; this.curX = 0; this.targetX = 0; this.shipRoll = 0;
+                document.getElementById('score-val').textContent = '0';
+                document.getElementById('start-screen').classList.add('hidden');
+                document.getElementById('over-screen').classList.add('hidden');
+                this.walls.forEach(w => this.scene.remove(w.group)); this.walls = [];
+                this.addWall(-60); this.addWall(-120);
+                this.generateStroopChallenge();
+                this.status = 'playing'; this.lastTime = performance.now();
+            },
+
+            addWall(zPos) {
+                const group = new THREE.Group(); group.position.z = zPos;
+                let colorIndices = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+                for(let i=0; i<4; i++) {
+                    const c = COLORS[colorIndices[i]];
+                    const gateGeo = new THREE.BoxGeometry(this.laneWidth - 0.2, 3, 0.5);
+                    const gateMat = new THREE.MeshPhysicalMaterial({ color: c.hex, emissive: c.hex, emissiveIntensity: 0.8, transparent: true, opacity: 0.6 });
+                    const gate = new THREE.Mesh(gateGeo, gateMat);
+                    gate.position.x = (i * this.laneWidth) - (this.laneWidth * 1.5); gate.position.y = 1.5; group.add(gate);
+                    const light = new THREE.PointLight(c.hex, 1, 5); light.position.set(gate.position.x, 2, 0); group.add(light);
+                }
+                this.scene.add(group); this.walls.push({ group: group, colors: colorIndices, passed: false });
+            },
+
+            generateStroopChallenge() {
+                this.meaningIndex = Math.floor(Math.random() * 4);
+                let textColIndex = Math.floor(Math.random() * 4);
+                if(textColIndex === this.meaningIndex && Math.random() > 0.2) textColIndex = (textColIndex + 1) % 4;
+                const wordEl = document.getElementById('word');
+                wordEl.textContent = COLORS[this.meaningIndex].name;
+                wordEl.style.color = COLORS[textColIndex].css;
+                wordEl.style.opacity = '1';
+                wordEl.style.transform = 'scale(1.3)';
+                setTimeout(() => { if(this.status === 'playing') wordEl.style.transform = 'scale(1)'; }, 150);
+                this.player.material.emissive.setHex(COLORS[textColIndex].hex);
+                this.playerLight.color.setHex(COLORS[textColIndex].hex);
+            },
+
+            gameOver() {
+                this.status = 'over'; audioEngine.fail();
+                const flash = document.getElementById('flash'); flash.style.opacity = '1'; setTimeout(() => flash.style.opacity = '0', 200);
+                if(this.score > this.best) { this.best = this.score; localStorage.setItem('stroop_pro_best', this.best); document.getElementById('best-val').textContent = `BEST: ${this.best}`; }
+                document.getElementById('final-score').textContent = this.score;
+                document.getElementById('over-screen').classList.remove('hidden');
+                document.getElementById('word').style.opacity = '0';
+            },
+
+            loop() {
+                requestAnimationFrame(() => this.loop());
+                const now = performance.now(); const dt = Math.min((now - this.lastTime) / 1000, 0.1); this.lastTime = now;
+                if(this.status !== 'playing') {
+                    if(this.player) { this.player.rotation.y += 0.5 * dt; this.grid.position.z = (this.grid.position.z + 10 * dt) % 10; }
+                    this.renderer.render(this.scene, this.camera); return;
+                }
+                this.curX += (this.targetX - this.curX) * 15 * dt; this.player.position.x = this.curX;
+                const targetRoll = (this.curX - this.targetX) * 0.4; this.shipRoll += (targetRoll - this.shipRoll) * 10 * dt;
+                this.player.rotation.z = this.shipRoll; this.player.rotation.y = this.shipRoll * 0.5;
+                this.camera.position.x += (this.curX * 0.3 - this.camera.position.x) * 5 * dt;
+                this.grid.position.z = (this.grid.position.z + this.currentSpeed * dt) % 10;
+                this.particles.update(dt, this.currentSpeed);
+                for(let i=this.walls.length-1; i>=0; i--) {
+                    let w = this.walls[i]; w.group.position.z += this.currentSpeed * dt;
+                    if(!w.passed && w.group.position.z >= 0 && w.group.position.z < 5) {
+                        w.passed = true;
+                        let normalizedX = this.player.position.x + (this.laneWidth * 1.5);
+                        let lane = Math.round(normalizedX / this.laneWidth); lane = Math.max(0, Math.min(3, lane));
+                        if(w.colors[lane] === this.meaningIndex) {
+                            this.score++; document.getElementById('score-val').textContent = this.score;
+                            // التسارع أصبح أبطأ (0.8 بدلاً من 1.5) لنمو صعوبة ناعم
+                            this.currentSpeed = Math.min(140, this.baseSpeed + (this.score * this.speedMultiplier));
+                            audioEngine.success(this.score); this.generateStroopChallenge();
+                            w.group.children[lane].material.emissiveIntensity = 3; w.group.children[lane].material.opacity = 0.1;
+                        } else { this.gameOver(); }
+                    }
+                    if(w.group.position.z > 15) {
+                        this.scene.remove(w.group); this.walls.splice(i, 1);
+                        const spawnDist = Math.max(50, this.currentSpeed * 1.2);
+                        this.addWall(this.walls[this.walls.length-1].group.position.z - spawnDist);
+                    }
+                }
+                this.renderer.render(this.scene, this.camera);
+            }
+        };
+
+        window.onload = () => game.init();
+    </script>
+</body>
+</html>
+
+```
